@@ -108,5 +108,20 @@ if(result != null) {
 For full usage details refer to the **[Wiki](https://github.com/miguelpruivo/flutter_file_picker/wiki)** above.
 
 ## Example App
+<<<<<<< HEAD
 ![Demo](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example.gif?raw=true)
 ![DemoMultiFilters](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example_ios.gif?raw=true)
+=======
+![Demo](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example.gif)
+![DemoMultiFilters](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example_ios.gif)
+
+## Getting Started
+
+For help getting started with Flutter, view our online
+[documentation](https://flutter.io/).
+
+For help on editing plugin code, view the [documentation](https://flutter.io/platform-plugins/#edit-code).
+
+
+
+>>>>>>> Fixes README screenshots
