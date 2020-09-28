@@ -36,6 +36,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
     private boolean loadDataToMemory = false;
     private String type;
     private String[] allowedExtensions;
+    private boolean disableExternalSources = false;
     private EventChannel.EventSink eventSink;
 
     public FilePickerDelegate(final Activity activity) {
@@ -195,7 +196,11 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
         if (type.equals("dir")) {
             intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         } else {
-            intent = new Intent(Intent.ACTION_GET_CONTENT);
+            if (this.disableExternalSources) {
+                intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            } else {
+                intent = new Intent(Intent.ACTION_GET_CONTENT);
+            }
             final Uri uri = Uri.parse(Environment.getExternalStorageDirectory().getPath() + File.separator);
             Log.d(TAG, "Selected type " + type);
             intent.setDataAndType(uri, this.type);
@@ -221,7 +226,8 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
     }
 
     @SuppressWarnings("deprecation")
-    public void startFileExplorer(final String type, final boolean isMultipleSelection, final boolean withData, final String[] allowedExtensions, final MethodChannel.Result result) {
+    public void startFileExplorer(final String type, final boolean isMultipleSelection, final boolean withData,
+                                  final String[] allowedExtensions, final boolean disableExternalSources, final MethodChannel.Result result) {
 
         if (!this.setPendingMethodCallAndResult(result)) {
             finishWithAlreadyActiveError(result);
@@ -232,6 +238,7 @@ public class FilePickerDelegate implements PluginRegistry.ActivityResultListener
         this.isMultipleSelection = isMultipleSelection;
         this.loadDataToMemory = withData;
         this.allowedExtensions = allowedExtensions;
+        this.disableExternalSources = disableExternalSources;
 
         if (!this.permissionManager.isPermissionGranted(Manifest.permission.READ_EXTERNAL_STORAGE)) {
             this.permissionManager.askForPermission(Manifest.permission.READ_EXTERNAL_STORAGE, REQUEST_CODE);

@@ -24,6 +24,7 @@ class FilePickerIO extends FilePicker {
     Function(FilePickerStatus) onFileLoading,
     bool allowCompression = true,
     bool allowMultiple = false,
+    bool disableExternalSources = false,
     bool withData = false,
   }) =>
       _getPath(
@@ -31,6 +32,7 @@ class FilePickerIO extends FilePicker {
         allowMultiple,
         allowCompression,
         allowedExtensions,
+        disableExternalSources,
         onFileLoading,
         withData,
       );
@@ -57,6 +59,7 @@ class FilePickerIO extends FilePicker {
     bool allowMultipleSelection,
     bool allowCompression,
     List<String> allowedExtensions,
+    bool disableExternalSources,
     Function(FilePickerStatus) onFileLoading,
     bool withData,
   ) async {
@@ -79,6 +82,7 @@ class FilePickerIO extends FilePicker {
       final List<Map> result = await _channel.invokeListMethod(type, {
         'allowMultipleSelection': allowMultipleSelection,
         'allowedExtensions': allowedExtensions,
+        'disableExternalSources': disableExternalSources,
         'allowCompression': allowCompression,
         'withData': withData,
       });
