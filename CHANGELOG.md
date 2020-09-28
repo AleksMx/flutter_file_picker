@@ -1,3 +1,16 @@
+## 2.0.3
+Android: Fixes out of memory issue on some devices when picking big files.
+
+## 2.0.2+2
+Fixes multi-pick example on README.
+
+## 2.0.2+1
+iOS: Fixes conditional import for backwards compatibility with Xcode 11.
+
+## 2.0.2
+Web: Adds mobile Safari support and other minor improvements.
+iOS: Adds conditional import for backwards compatibility with Xcode 11.
+
 ## 2.0.1+2
 iOS: Addresses an issue that could prevent users from viewing picked media elements (pictures/videos) from gallery on iOS 14.
 

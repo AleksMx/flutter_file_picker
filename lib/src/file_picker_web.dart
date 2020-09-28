@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:html';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -10,7 +9,7 @@ import 'file_picker_result.dart';
 import 'platform_file.dart';
 
 class FilePickerWeb extends FilePicker {
-  html.Element _target;
+  Element _target;
   final String _kFilePickerInputsDomId = '__file_picker_web-file-input';
 
   static final FilePickerWeb platform = FilePickerWeb._();
@@ -24,13 +23,13 @@ class FilePickerWeb extends FilePicker {
   }
 
   /// Initializes a DOM container where we can host input elements.
-  html.Element _ensureInitialized(String id) {
-    var target = html.querySelector('#${id}');
+  Element _ensureInitialized(String id) {
+    Element target = querySelector('#$id');
     if (target == null) {
-      final html.Element targetElement =
-      html.Element.tag('flt-file-picker-inputs')..id = id;
+      final Element targetElement = Element.tag('flt-file-picker-inputs')
+        ..id = id;
 
-      html.querySelector('body').children.add(targetElement);
+      querySelector('body').children.add(targetElement);
       target = targetElement;
     }
     return target;
@@ -49,49 +48,47 @@ class FilePickerWeb extends FilePicker {
         Completer<List<PlatformFile>>();
 
     String accept = _fileType(type, allowedExtensions);
-    html.InputElement uploadInput = html.FileUploadInputElement();
+    InputElement uploadInput = FileUploadInputElement();
     uploadInput.draggable = true;
     uploadInput.multiple = allowMultiple;
     uploadInput.accept = accept;
 
     bool changeEventTriggered = false;
-    void changeEventListener (e) {
+    void changeEventListener(e) {
       if (changeEventTriggered) {
         return;
       }
       changeEventTriggered = true;
 
-      List<html.File> files = uploadInput.files;
-      List<PlatformFile> pickedFiles = [];
+      final List<File> files = uploadInput.files;
+      final List<PlatformFile> pickedFiles = [];
 
-      void addPickedFile (html.File file, Uint8List bytes, String path) {
-        pickedFiles.add(
-          PlatformFile(
-            name: file.name,
-            path: path,
-            size: bytes != null ? bytes.length : -1,
-            bytes: withData ? bytes : null,
-          )
-        );
+      void addPickedFile(File file, Uint8List bytes, String path) {
+        pickedFiles.add(PlatformFile(
+          name: file.name,
+          path: path,
+          size: bytes != null ? bytes.length ~/ 1024 : -1,
+          bytes: bytes,
+        ));
 
         if (pickedFiles.length >= files.length) {
           filesCompleter.complete(pickedFiles);
         }
       }
 
-      files.forEach((html.File file) {
+      files.forEach((File file) {
         if (!withData) {
-          final reader = html.FileReader();
+          final FileReader reader = FileReader();
           reader.onLoadEnd.listen((e) {
-            addPickedFile (file, null, reader.result);
+            addPickedFile(file, null, reader.result);
           });
           reader.readAsDataUrl(file);
           return;
         }
 
-        final reader = html.FileReader();
+        final FileReader reader = FileReader();
         reader.onLoadEnd.listen((e) {
-          addPickedFile (file, reader.result, null);
+          addPickedFile(file, reader.result, null);
         });
         reader.readAsArrayBuffer(file);
       });

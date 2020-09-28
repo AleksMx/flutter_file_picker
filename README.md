@@ -26,9 +26,9 @@ A package that allows you to use a native file explorer to pick single or multip
 * Load files from **image** only
 * Load files from **video** only
 * Load files from **directory**
-* Load files from **any**
-* Load files data immediately to memory (`Uint8List`)
-* Supports web
+* Load files from **any** 
+* Load files data immediately to memory (`Uint8List`);
+* Supports web;
 * Supports desktop through **go-flutter** (MacOS, Windows, Linux) 
 
 If you have any feature that you want to see in this package, please feel free to issue a suggestion. 🎉
@@ -56,62 +56,44 @@ Quick simple usage example:
 #### Single file
 ```
 FilePickerResult result = await FilePicker.platform.pickFiles();
-if (result == null) {
-  return;
+
+if(result != null) {
+   File file = File(result.files.single.path);
 }
-
-Uint8List bytes = result.files.single.bytes;
-
 ```
 #### Multiple files
 ```
 FilePickerResult result = await FilePicker.platform.pickFiles(allowMultiple: true);
-if (result == null) {
-  return;
+
+if(result != null) {
+   List<File> files = result.paths.map((path) => File(path)).toList();
 }
-
-result.files.forEach((PlatformFile file) {
-  Uint8List bytes = file.bytes;
-  if (file.bytes == null) {
-    print('wrong file');
-    return;
-  }
-  print('file: ' + file.name + ' - ' + file.size.toString());
-
-  //Next, you can use bytes variable to continue working with the file:
-  //sendFile (file.name, bytes);
-});
-
 ```
 #### Multiple files with extension filter
 ```
 FilePickerResult result = await FilePicker.platform.pickFiles(
-  type: FileType.custom,
-  allowedExtensions: ['jpg', 'pdf', 'doc'],
-);
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'pdf', 'doc'],
+        );
 ```
-#### Load result and file details
+### Load result and file details
 ```
 FilePickerResult result = await FilePicker.platform.pickFiles();
 
 if(result != null) {
-  PlatformFile file = result.files.first;
-
-  print(file.name);
-  print(file.bytes);
-  print(file.size);
-  print(file.extension);
-  print(file.path);
+   PlatformFile file = result.files.first;
+   
+   print(file.name);
+   print(file.bytes);
+   print(file.size);
+   print(file.extension);
+   print(file.path);
 }
 ```
 
 For full usage details refer to the **[Wiki](https://github.com/miguelpruivo/flutter_file_picker/wiki)** above.
 
 ## Example App
-<<<<<<< HEAD
-![Demo](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example.gif?raw=true)
-![DemoMultiFilters](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example_ios.gif?raw=true)
-=======
 ![Demo](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example.gif)
 ![DemoMultiFilters](https://github.com/miguelpruivo/flutter_file_picker/blob/master/example/example_ios.gif)
 
@@ -124,4 +106,3 @@ For help on editing plugin code, view the [documentation](https://flutter.io/pla
 
 
 
->>>>>>> Fixes README screenshots
