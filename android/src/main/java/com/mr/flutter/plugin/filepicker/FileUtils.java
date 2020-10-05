@@ -113,9 +113,48 @@ public class FileUtils {
     }
 
     public static FileInfo openFileStream(final Context context, final Uri uri, boolean withData) {
+        boolean notCache = true;
+        if (notCache && withData) {
+            try {
+                final InputStream inputStream = context.getContentResolver().openInputStream(uri);
+
+                Log.i(TAG, "Read without cache: " + uri.toString());
+
+                int size = (int) inputStream.available();
+                byte[] bytes = new byte[size];
+
+                int bytesReaded = 0;
+                int readSize = 4096 * 10;
+                while (inputStream.available() > 0) {
+                    int toRead = inputStream.available();
+                    if (toRead > readSize) {
+                        toRead = readSize;
+                    }
+                    int count = inputStream.read(bytes, bytesReaded, toRead);
+                    bytesReaded += count;
+                }
+                inputStream.close();
+
+                final FileInfo.Builder fileInfo = new FileInfo.Builder();
+                final String fileName = FileUtils.getFileName(uri, context);
+
+                fileInfo
+                    .withPath(uri.toString())
+                    .withName(fileName)
+                    .withData(bytes)
+                    .withSize(Integer.parseInt(String.valueOf(size/1024)));
+
+                return fileInfo.build();
+            } catch (FileNotFoundException e) {
+                Log.e(TAG, "File not found: " + e.getMessage(), null);
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to close file streams: " + e.getMessage(), null);
+            }
+            return null;
+        }
+
 
         Log.i(TAG, "Caching from URI: " + uri.toString());
-        FileOutputStream fos = null;
         final FileInfo.Builder fileInfo = new FileInfo.Builder();
         final String fileName = FileUtils.getFileName(uri, context);
         final String path = context.getCacheDir().getAbsolutePath() + "/file_picker/" + (fileName != null ? fileName : new Random().nextInt(100000));
@@ -123,13 +162,26 @@ public class FileUtils {
         final File file = new File(path);
 
         if(file.exists() && withData) {
+            Log.i(TAG, "read cache");
+
             int size = (int) file.length();
             byte[] bytes = new byte[size];
 
             try {
-                BufferedInputStream buf = new BufferedInputStream(new FileInputStream(file));
-                buf.read(bytes, 0, bytes.length);
-                buf.close();
+                BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(file));
+                Log.i(TAG, "read file: " + uri.toString());
+
+                int bytesReaded = 0;
+                while (inputStream.available() > 0) {
+                    int toRead = inputStream.available();
+                    if (toRead > 4096) {
+                        toRead = 4096;
+                    }
+                    int count = inputStream.read(bytes, bytesReaded, toRead);
+                    bytesReaded += count;
+                }
+
+                inputStream.close();
             } catch (FileNotFoundException e) {
                 Log.e(TAG, "File not found: " + e.getMessage(), null);
             } catch (IOException e) {
@@ -137,45 +189,49 @@ public class FileUtils {
             }
             fileInfo.withData(bytes);
         } else {
-
+            Log.i(TAG, "no read file");
             file.getParentFile().mkdirs();
             try {
-                fos = new FileOutputStream(path);
-                try {
-                    final BufferedOutputStream out = new BufferedOutputStream(fos);
-                    final InputStream in = context.getContentResolver().openInputStream(uri);
+                final BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(path));
+                final InputStream in = context.getContentResolver().openInputStream(uri);
 
-                    final byte[] buffer = new byte[8192];
-                    int len = 0;
+                final byte[] buffer = new byte[8192];
+                int len = 0;
+                while ((len = in.read(buffer)) >= 0) {
+                    out.write(buffer, 0, len);
+                }
+                in.close();
+                out.close();
 
-                    while ((len = in.read(buffer)) >= 0) {
-                        out.write(buffer, 0, len);
-                    }
+                //
+                if(withData) {
+                     Log.i(TAG, "withData");
+                    try {
+                        byte[] bytes = new byte[(int) file.length()];
 
-                    if(withData) {
-                        try {
-                            FileInputStream fis = null;
-                            byte[] bytes = new byte[(int) file.length()];
-                            fis = new FileInputStream(file);
-                            fis.read(bytes);
-                            fis.close();
-                            fileInfo.withData(bytes);
-                        }  catch (Exception e) {
-                            Log.e(TAG, "Failed to load bytes into memory with error " + e.toString() + ". Probably the file is too big to fit device memory. Bytes won't be added to the file this time.");
+                        BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(file));
+                        Log.i(TAG, "read file: " + uri.toString());
+
+                        int bytesReaded = 0;
+                        while (inputStream.available() > 0) {
+                            int toRead = inputStream.available();
+                            if (toRead > 4096) {
+                                toRead = 4096;
+                            }
+                            int count = inputStream.read(bytes, bytesReaded, toRead);
+                            bytesReaded += count;
                         }
-                    }
 
-                    out.flush();
-                } finally {
-                    fos.getFD().sync();
+                        Log.i(TAG, "inputStream readed");
+
+                        inputStream.close();
+
+                        fileInfo.withData(bytes);
+                    }  catch (Exception e) {
+                        Log.e(TAG, "Failed to load bytes into memory with error " + e.toString() + ". Probably the file is too big to fit device memory. Bytes won't be added to the file this time.");
+                    }
                 }
             } catch (final Exception e) {
-                try {
-                    fos.close();
-                } catch (final IOException | NullPointerException ex) {
-                    Log.e(TAG, "Failed to close file streams: " + e.getMessage(), null);
-                    return null;
-                }
                 Log.e(TAG, "Failed to retrieve path: " + e.getMessage(), null);
                 return null;
             }
