@@ -10,10 +10,10 @@ dependencies:
     sdk: flutter
     
   flutter_plugin_android_lifecycle: ^1.0.6
-  plugin_platform_interface: ^1.0.1 
+  plugin_platform_interface: ^2.0.0
 
 environment:
-  sdk: ">=2.0.0 <3.0.0"
+  sdk: ">=2.1.0 <3.0.0"
   flutter: ">=1.10.0 <2.0.0"
 
 flutter:
