@@ -7,13 +7,14 @@
 @interface FilePickerPlugin() <DKImageAssetExporterObserver>
 @property (nonatomic) FlutterResult result;
 @property (nonatomic) FlutterEventSink eventSink;
-@property (nonatomic) UIViewController *viewController;
+@property (nonatomic, readonly) UIViewController *viewController;
 @property (nonatomic) UIImagePickerController *galleryPickerController;
 @property (nonatomic) UIDocumentPickerViewController *documentPickerController;
 @property (nonatomic) UIDocumentInteractionController *interactionController;
 @property (nonatomic) MPMediaPickerController *audioPickerController;
 @property (nonatomic) NSArray<NSString *> * allowedExtensions;
 @property (nonatomic) BOOL loadDataToMemory;
+@property (nonatomic) dispatch_group_t group;
 @end
 
 @implementation FilePickerPlugin
@@ -27,20 +28,24 @@
                                          eventChannelWithName:@"miguelruivo.flutter.plugins.filepickerevent"
                                          binaryMessenger:[registrar messenger]];
     
-    UIViewController *viewController = [UIApplication sharedApplication].delegate.window.rootViewController;
-    FilePickerPlugin* instance = [[FilePickerPlugin alloc] initWithViewController:viewController];
+    FilePickerPlugin* instance = [[FilePickerPlugin alloc] init];
     
     [registrar addMethodCallDelegate:instance channel:channel];
     [eventChannel setStreamHandler:instance];
 }
 
-- (instancetype)initWithViewController:(UIViewController *)viewController {
+- (instancetype)init {
     self = [super init];
-    if(self) {
-        self.viewController = viewController;
-    }
     
     return self;
+}
+
+- (UIViewController *)viewController {
+    UIViewController *rootViewController = [UIApplication sharedApplication].delegate.window.rootViewController;
+    while (rootViewController.presentedViewController) {
+        rootViewController = rootViewController.presentedViewController;
+    }
+    return rootViewController;
 }
 
 - (FlutterError *)onListenWithArguments:(id)arguments eventSink:(FlutterEventSink)events {
@@ -71,7 +76,12 @@
     }
     
     if([call.method isEqualToString:@"dir"]) {
-        [self resolvePickDocumentWithMultiPick:NO pickDirectory:YES];
+        if (@available(iOS 13, *)) {
+            [self resolvePickDocumentWithMultiPick:NO pickDirectory:YES];
+        } else {
+            _result([self getDocumentDirectory]);
+            _result = nil;
+        }
         return;
     }
     
@@ -97,7 +107,11 @@
         result(FlutterMethodNotImplemented);
         _result = nil;
     }
-    
+}
+
+- (NSString*)getDocumentDirectory {
+    NSArray* paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    return paths.firstObject;
 }
 
 #pragma mark - Resolvers
@@ -123,15 +137,19 @@
     self.documentPickerController.modalPresentationStyle = UIModalPresentationCurrentContext;
     self.galleryPickerController.allowsEditing = NO;
     
-    [_viewController presentViewController:self.documentPickerController animated:YES completion:nil];
+    [self.viewController presentViewController:self.documentPickerController animated:YES completion:nil];
 }
 
 - (void) resolvePickMedia:(MediaType)type withMultiPick:(BOOL)multiPick withCompressionAllowed:(BOOL)allowCompression  {
-
-    #ifdef PHPicker
+    
+#ifdef PHPicker
     if (@available(iOS 14, *)) {
         PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
         config.filter = type == IMAGE ? [PHPickerFilter imagesFilter] : type == VIDEO ? [PHPickerFilter videosFilter] : [PHPickerFilter anyFilterMatchingSubfilters:@[[PHPickerFilter videosFilter], [PHPickerFilter imagesFilter]]];
+
+        if(type == VIDEO) {
+            config.preferredAssetRepresentationMode = PHPickerConfigurationAssetRepresentationModeCurrent;
+        }
         
         if(multiPick) {
             config.selectionLimit = 0;
@@ -139,10 +157,11 @@
         
         PHPickerViewController *pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:config];
         pickerViewController.delegate = self;
+        pickerViewController.modalPresentationStyle = UIModalPresentationCurrentContext;
         [self.viewController presentViewController:pickerViewController animated:YES completion:nil];
         return;
     }
-    #endif
+#endif
     
     if(multiPick) {
         [self resolveMultiPickFromGallery:type withCompressionAllowed:allowCompression];
@@ -188,9 +207,10 @@
     UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"" message:@"" preferredStyle:UIAlertControllerStyleAlert];
     UIActivityIndicatorView* indicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
     
+    UIViewController *currentViewController = self.viewController;
     if(_eventSink == nil) {
         // Create alert dialog for asset caching
-        [alert.view setCenter: _viewController.view.center];
+        [alert.view setCenter: currentViewController.view.center];
         [alert.view addConstraint: [NSLayoutConstraint constraintWithItem:alert.view attribute:NSLayoutAttributeHeight relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:100]];
         
         // Create a default loader if user don't provide a status handler
@@ -222,7 +242,7 @@
                 self->_eventSink([NSNumber numberWithBool:YES]);
             } else {
                 [indicator startAnimating];
-                [self->_viewController showViewController:alert sender:nil];
+                [currentViewController showViewController:alert sender:nil];
             }
             
         } else {
@@ -246,14 +266,16 @@
     [dkImagePickerController setDidSelectAssets:^(NSArray<DKAsset*> * __nonnull DKAssets) {
         NSMutableArray<NSURL*>* paths = [[NSMutableArray<NSURL*> alloc] init];
         
-        for(DKAsset * asset in DKAssets){
-            [paths addObject:asset.localTemporaryPath.absoluteURL];
+        for(DKAsset * asset in DKAssets) {
+            if(asset.localTemporaryPath.absoluteURL != nil) {
+                [paths addObject:asset.localTemporaryPath.absoluteURL];
+            }
         }
         
         [self handleResult: paths];
     }];
     
-    [_viewController presentViewController:dkImagePickerController animated:YES completion:nil];
+    [self.viewController presentViewController:dkImagePickerController animated:YES completion:nil];
 }
 
 - (void) resolvePickAudioWithMultiPick:(BOOL)isMultiPick {
@@ -352,6 +374,10 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 
 -(void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14)){
     
+    if(self.group != nil) {
+        return;
+    }
+    
     Log(@"Picker:%@ didFinishPicking:%@", picker, results);
     
     [picker dismissViewControllerAnimated:YES completion:nil];
@@ -365,17 +391,52 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
     
-    dispatch_group_t group = dispatch_group_create();
+    self.group = dispatch_group_create();
+    
+    if(self->_eventSink != nil) {
+        self->_eventSink([NSNumber numberWithBool:YES]);
+    }
     
     for (PHPickerResult *result in results) {
-        dispatch_group_enter(group);
-        [result.itemProvider loadInPlaceFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, BOOL isInPlace, NSError * _Nullable error) {
-            [urls addObject:url];
-            dispatch_group_leave(group);
+        dispatch_group_enter(_group);
+        [result.itemProvider loadFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
+            
+            if(url == nil) {
+                Log("Could not load the picked given file: %@", error);
+                dispatch_group_leave(self->_group);
+                return;
+            }
+            
+            NSString * filename = url.lastPathComponent;
+            NSString * cachedFile = [NSTemporaryDirectory() stringByAppendingPathComponent:filename];
+            
+            NSFileManager * fileManager = NSFileManager.defaultManager;
+            
+            if([fileManager fileExistsAtPath:cachedFile]) {
+                [fileManager removeItemAtPath:cachedFile error:NULL];
+            }
+            
+            NSURL * cachedUrl = [NSURL fileURLWithPath: cachedFile];
+            NSError *copyError;
+            [NSFileManager.defaultManager copyItemAtURL: url
+                                                  toURL: cachedUrl
+                                                  error: &copyError];
+            
+            if (copyError) {
+                Log("%@ Error while caching picked file: %@", self, copyError);
+                return;
+            }
+            
+            [urls addObject:cachedUrl];
+            dispatch_group_leave(self->_group);
         }];
     }
     
-    dispatch_group_notify(group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
+    dispatch_group_notify(_group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
+        self->_group = nil;
+        if(self->_eventSink != nil) {
+            self->_eventSink([NSNumber numberWithBool:NO]);
+        }
         [self handleResult:urls];
     });
 }
@@ -387,10 +448,25 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 - (void)mediaPicker: (MPMediaPickerController *)mediaPicker didPickMediaItems:(MPMediaItemCollection *)mediaItemCollection
 {
     [mediaPicker dismissViewControllerAnimated:YES completion:NULL];
-    NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:[mediaItemCollection items].count];
+    int numberOfItems = (int)[mediaItemCollection items].count;
+    
+    if(numberOfItems == 0) {
+        return;
+    }
+    
+    if(_eventSink != nil) {
+        _eventSink([NSNumber numberWithBool:YES]);
+    }
+    
+    NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:numberOfItems];
     
     for(MPMediaItemCollection * item in [mediaItemCollection items]) {
-        [urls addObject: [item valueForKey:MPMediaItemPropertyAssetURL]];
+        NSURL * cachedAsset = [FileUtils exportMusicAsset: [item valueForKey:MPMediaItemPropertyAssetURL] withName: [item valueForKey:MPMediaItemPropertyTitle]];
+        [urls addObject: cachedAsset];
+    }
+    
+    if(_eventSink != nil) {
+        _eventSink([NSNumber numberWithBool:NO]);
     }
     
     if(urls.count == 0) {
