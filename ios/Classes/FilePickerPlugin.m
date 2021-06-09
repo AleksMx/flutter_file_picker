@@ -351,7 +351,6 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
 #ifdef PHPicker
 
 -(void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14)){
-    
     Log(@"Picker:%@ didFinishPicking:%@", picker, results);
     
     [picker dismissViewControllerAnimated:YES completion:nil];
@@ -366,16 +365,42 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls{
     NSMutableArray<NSURL *> * urls = [[NSMutableArray alloc] initWithCapacity:results.count];
     
     dispatch_group_t group = dispatch_group_create();
+
+    Log(@"Picker loading");
     
     for (PHPickerResult *result in results) {
+        NSItemProvider *itemProvider = result.itemProvider;
+        
         dispatch_group_enter(group);
-        [result.itemProvider loadInPlaceFileRepresentationForTypeIdentifier:@"public.item" completionHandler:^(NSURL * _Nullable url, BOOL isInPlace, NSError * _Nullable error) {
-            [urls addObject:url];
+        [result.itemProvider loadObjectOfClass:[UIImage class] completionHandler:^(__kindof id<NSItemProviderReading>  _Nullable object, NSError * _Nullable error) {
+            if (![object isKindOfClass:[UIImage class]]) {
+                Log(@"wrong image class");
+                return;
+            }
+        
+            UIImage *image = object;
+            NSData *data = UIImageJPEGRepresentation(image, 0.85);
+            NSUInteger size = [data length];
+            
+            NSUUID *uuid = [NSUUID UUID];
+            NSString *uuidStr = [uuid UUIDString];
+            NSString *fileName = [NSString stringWithFormat:@"%@-image.jpg", uuidStr];
+        
+            NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:fileName];
+            NSURL *fileURL = [NSURL URLWithString:filePath];
+        
+            NSLog(@"image: %s, size: %lu", [filePath UTF8String], size);
+        
+            [data writeToFile:filePath options:NSDataWritingAtomic error:&error];
+            NSLog(@"image write error: %@", [error localizedDescription]);
+        
+            [urls addObject:fileURL];
             dispatch_group_leave(group);
-        }];
+         }];
     }
     
     dispatch_group_notify(group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),^{
+        NSLog(@"All images writed");
         [self handleResult:urls];
     });
 }
